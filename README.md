@@ -7,6 +7,4 @@ This repository comprises the code I used to develop the poster I will present a
 If you're interested in learning more about how I developed the poster or would like to collaborate on future projects, please feel free to contact me at ccani007@fiu.edu. While the code may not be directly applicable, I'm happy to discuss my process and share insights with you.
 
 
-<iframe width="800" height="800" src="hopelessness_poster.pdf">
-
-</iframe>
+![](poster.png)
