@@ -1,0 +1,611 @@
+---
+title: "Persistent Sadness and Hopelessness in Youth: A Supervised Machine Learning Classification Approach to Identify Risk Factors"
+author:
+  - name: Catalina Cañizares
+    affil: 1
+  - name: Accacia Russell
+    affil: 1
+  - name: Mark J. Macgowan
+    affil: 1
+  - name: Gabriel Odom
+    affil: 1
+affiliation:
+  - num: 1
+    address: Robert Stempel College of Public Health and Social Work, Florida International University
+column_numbers: 3
+logoleft_name: "images/athletic-vertical.png"
+bibliography: SPRRef.bib
+primary_colour: "#081E3F"
+titlebox_bordercol: "#B6862C"
+body_textsize: "31px"
+output: 
+  posterdown::posterdown_html:
+    self_contained: TRUE
+knit: pagedown::chrome_print
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(readr)
+library(gtsummary)
+library(tidyverse)
+library(gtsummary)
+library(gt)
+library(srvyr)
+library(tidyYRBS)
+```
+
+# Introduction
+
+The Centers for Disease Control and Prevention (CDC) recently released the Youth Risk Behavior Survey Data Summary and Trends Report: 2011-2021 (CDC, 2023). This is the first YRBS data to be collected since the beginning of the pandemic and the findings are particularly worrying. Three out of five teenage girls reported persistent feelings of sadness or hopelessness, which is double the rate for boys and the highest level reported in a decade. This highlights the urgent need to better understand hopelessness and reverse this negative trend, ensuring that youth have the support they need to be healthy and thrive.
+
+Numerous studies have consistently demonstrated the strong association between feelings of hopelessness and mental health issues, such as depression and suicidality (Park & Kim, 2018). Various factors have been identified as contributing to feelings of hopelessness, including school-related stress (Lane & Miranda, 2018), adapting to academic expectations (Lum et al., 2019), socioeconomic status (Kaniuka et al. (2020), generational trauma (Jelsma et al. (2022), childhood trauma (Aafjes-van Doorn et al. (2020), personality (Kelliher-Rabon et al. (2022), and negative life events (Hirsch et al. (2021).
+
+It is crucial to understand these risk factors to prevent persistent sadness and hopelessness in youth and its associated mental health consequences. However, traditional research has focused on individual risk factors in isolation, limiting the understanding of how multiple variables interact and contribute to feelings of hopelessness. As a result, programs may not consider the effects of interacting risk factors. Therefore, there is a pressing need to develop more complex models that account for the presence of multiple risk factors to better understand the complex interplay between these variables.
+
+**Objective**  
+This study aims to analyze multiple risk factors using supervised machine learning methods to accurately predict sadness and hopelessness and identify the principal risk factors that contribute to these negative emotions.
+
+ 
+# Methods
+
+- Data from the 2019 YRBSS was used for this study.  
+- The sample consisted of 13,491 adolescents.  
+- The outcome variable, feelings of hopelessness, was measured using a binary response to the question: "In the past 12 months, have you experienced such intense sadness or hopelessness for two or more weeks in a row that you stopped engaging in your usual activities?"  
+- The model incorporated **58** variables related to behaviors that contribute to unintentional injuries and violence, sexual behaviors, alcohol and other drug use, tobacco use, unhealthy diet, and physical activity. Age, sex, race/ethnicity, and sexual orientation were included as covariates during analysis.  
+
+**Analysis plan** 
+
+- To identify the principal risk factors related to feelings of hopelessness, we used the *Least Absolute Shrinkage and Selection Operator (Lasso)*, *Random Forest*, and *Xgboost* algorithms.
+- The algorithm was trained and tested using 75% and 25% of the sample, respectively.
+- To prevent overfitting, we employed 5-fold cross-validation during the tuning process.
+
+# Results
+
+
+```{r wrangle, include=FALSE}
+data("clean_yrbs_2019")
+# 13677 x 89
+hopelesseness_df <-
+  clean_yrbs_2019 %>%
+  mutate(
+    across(
+      c(
+        Q19, Q23, Q24, Q25, Q30, Q34, Q57, Q39, Q57, Q63, Q58, Q98,
+        Q84, Q85, Q87
+      ),
+      factor
+    )
+  ) %>%
+  mutate(ID = as.character(ID)) %>%
+  mutate(SexOrientation = case_when(
+    SexOrientation == "Heterosexual" ~ "Heterosexual",
+    SexOrientation == "Bisexual" ~ "LGBQT",
+    SexOrientation == "Gay or Lesbian" ~ "LGBQT",
+    SexOrientation == "Not sure" ~ "LGBQT"
+  )) %>%
+  filter(!is.na(Q25)) %>%
+  select(-c(Q4, suicide_considered, suicide_planned)) |>
+  # Only renaming the variables that are selected in the vip
+  rename(
+    Sleep = Q88,
+    Bullying_At_School = Q23,
+    Vaping = Q34,
+    Electronic_Bullying = Q24,
+    Sexual_Abuse = Q19,
+    Video_Games = Q80,
+    Breakfast_Eating = Q77,
+    Illegal_Drugs_School = Q57,
+    Marijuana_Use = Q45,
+    Prescripted_Pain_Meds = Q49,
+    Physical_Dating_Violence = Q22,
+    Phyisical_Activity = Q78,
+    Marijuana_Frequency = Q47
+  )
+
+v <- skimr::skim(hopelesseness_df) %>%
+  arrange(complete_rate) %>%
+  filter(complete_rate <= 0.8) %>%
+  select(skim_variable)
+
+v_lost <- list(v)
+
+hopelessness_analysis <- hopelesseness_df %>%
+  select(-v_lost[[1]][["skim_variable"]])
+
+
+```
+
+In Table 1, we present the demographic characteristics of the study sample stratified by their hopelessness status. The adolescents analyzed in this study had a mean age of 16.1 years, with a standard deviation of 1.23, a minimum age of 12, and a maximum age of 18. Of the total sample, 37% of adolescents reported persistent sadness and hopelessness. Our findings indicate that teenage girls and individuals who identify as LGBTQ+ are significantly more vulnerable to experiencing feelings of hopelessness, with teenage girls reporting twice the amount of hopelessness compared to their male counterparts and more than half of the adolescents who identified as LGBTQ+ reporting persistent sadness. Additionally, multiple Hispanic and multiple non-Hispanic adolescents reported more feelings of hopelessness.
+
+Table 2 displays the performance of the three machine learning models employed in our study, all of which showed high predictive accuracy. XGboost and Random Forest exhibited the best overall performance with an AUC of 0.77 and accuracy of 0.73, followed closely by Lasso with an AUC of 0.76 and accuracy of 0.73. However, our models showed an imbalance between sensitivity and specificity, indicating high sensitivity but low specificity. Our findings suggest that XGboost outperforms the other models, demonstrating the highest Kappa specificity and Log-loss scores.
+
+Furthermore, we extracted the most important variables to predict hopelessness. As shown in Figure 1, bullying and cyberbullying, hours of sleep, being assigned male at birth, and identifying as LGBTQ+ were consistently ranked among the most important predictors for the outcome classification.
+
+Finally, the LASSO model was also effective in identifying the key variables that contribute to hopelessness, as well as protective factors against it. Figure 2 illustrates that being bullied in school, identifying as LGBTQ+, and experiencing cyberbullying were significant variables used to classify students in the hopelessness group. In contrast, being assigned male at birth, obtaining more sleep, and having breakfast were the most crucial predictors for classifying an adolescent as non-hopeless.
+
+
+
+###### Table 1 
+
+```{r demographics, out.width='100%', fig.align='center', fig.height=7}
+hopelessness_analysis_srv <-
+  hopelessness_analysis %>%
+  srvyr::as_survey_design(
+    ids     = psu,
+    weights = weight,
+    strata  = stratum,
+    nest    = TRUE
+  )
+
+sex <- hopelessness_analysis_srv %>%
+  group_by(Q25, Sex) |>
+  summarise(Variable = survey_total()) |>
+  select(- Variable_se) |>
+  pivot_wider(names_from = Q25,
+              values_from = Variable) |>
+  rename(No = `FALSE`, Yes = `TRUE`, Variable = Sex) |>
+  mutate(Type = "Sex") |>
+  mutate_if(is.character, ~replace_na(., "Missing for Sex")) |>
+  mutate(No = round(No, 0),
+         Yes = round(Yes, 0)) |>
+  mutate(Overall = Yes + No) |>
+  mutate("Percent" = (100*No)/Overall) |>
+  mutate("Percent " = (100*Yes)/Overall) |>
+  select(Variable, No, "Percent", Yes, "Percent ", Overall) |>
+  mutate(`Ratio No/Yes` = No/Yes)
+
+age <- hopelessness_analysis_srv %>%
+  group_by(Q25) |>
+  summarise(mean = survey_mean(Age, na.rm = TRUE),
+            min = min(Age, na.rm = TRUE),
+            max = max(Age, na.rm = TRUE),
+            sd = sd(Age, na.rm = TRUE),
+            median = median(Age, na.rm = TRUE))
+
+race <- hopelessness_analysis_srv |>
+  group_by(Q25, Race) |>
+  summarise(Variable = survey_total()) |>
+  select(-Variable_se) |>
+  pivot_wider(names_from = Q25,
+              values_from = Variable) |>
+  rename(No = `FALSE`, Yes = `TRUE`, Variable = Race)
+
+
+other_race <- race |>
+  filter(Variable %in%
+           c("Asian","Native Hawaiian/Other PI",
+             "Am Indian/Alaska Native")) |>
+  summarise(across(-Variable, sum)) |>
+  mutate(Variable= "Other")
+
+final_race <- race |>
+  filter(!Variable %in% c("Asian",
+                          "Native Hawaiian/Other PI",
+                          "Am Indian/Alaska Native")) |>
+  bind_rows(other_race) |>
+  mutate(Type = "Race/Ethnicity") |>
+  mutate_if(is.character, ~replace_na(., "Missing Race/Ethnicity")) |>
+  mutate(No = round(No, 0),
+         Yes = round(Yes, 0)) |>
+  arrange(desc(Yes)) |>
+  mutate(Overall = Yes + No) |>
+  mutate("Percent" = (100*No)/Overall) |>
+  mutate("Percent " = (100*Yes)/Overall) |>
+  select(Variable, No, "Percent", Yes, "Percent ", Overall) |>
+  mutate(`Ratio No/Yes` = No/Yes)
+
+
+grade <- hopelessness_analysis_srv |>
+  group_by(Q25, Grade) |>
+  summarise(Variable = survey_total()) |>
+  select(-Variable_se) |>
+  pivot_wider(names_from = Q25,
+              values_from = Variable) |>
+  rename(No = `FALSE`, Yes = `TRUE`, Variable = Grade) |>
+  mutate(Type = "Grade") |>
+  mutate(No = round(No, 0),
+         Yes = round(Yes, 0)) |>
+  mutate_if(is.character, ~replace_na(., "Missing for Grade"))|>
+  mutate(Overall = Yes + No) |>
+  mutate("Percent" = (100*No)/Overall) |>
+  mutate("Percent " = (100*Yes)/Overall) |>
+  select(Variable, No, "Percent", Yes, "Percent ", Overall) |>
+  mutate(`Ratio No/Yes` = No/Yes) %>% 
+  mutate(Variable = str_replace(Variable, "9", "09")) %>% 
+  arrange(Variable) 
+
+sexualOrientation <- hopelessness_analysis_srv %>% 
+  group_by(Q25, SexOrientation) %>% 
+   summarise(Variable = survey_total()) |>
+  select(-Variable_se) |>
+  pivot_wider(names_from = Q25,
+              values_from = Variable) |>
+  rename(No = `FALSE`, Yes = `TRUE`, Variable = SexOrientation) |>
+  mutate(Type = "Sexual Orientation") |>
+  mutate(No = round(No, 0),
+         Yes = round(Yes, 0)) |>
+  mutate_if(is.character, ~replace_na(., "Missing for Sexual Orientation"))|>
+  mutate(Overall = Yes + No) |>
+  mutate("Percent" = (100*No)/Overall) |>
+  mutate("Percent " = (100*Yes)/Overall) |>
+  select(Variable, No, "Percent", Yes, "Percent ", Overall) |>
+  mutate(`Ratio No/Yes` = No/Yes)
+
+hopeless <- hopelessness_analysis_srv |>
+  group_by(Q25) |>
+  summarise(Variable = survey_total()) |>
+  select(-Variable_se) |>
+  pivot_wider(names_from = Q25,
+              values_from = Variable) |>
+  rename(No = `FALSE`, Yes = `TRUE`) |>
+  mutate(Variable = "Feeling Hopeless") |>
+  select(Variable, everything()) |>
+  mutate(Type = "Hopelessness and Sadness") |>
+  mutate(No = round(No, 0),
+         Yes = round(Yes, 0)) |>
+  mutate(Overall = Yes + No) |>
+  mutate("Percent" = (100*No)/Overall) |>
+  mutate("Percent " = (100*Yes)/Overall) |>
+  select(Variable, No, "Percent", Yes, "Percent ", Overall) |>
+  mutate(`Ratio No/Yes` = No/Yes)
+
+bind_rows(sex, final_race, hopeless,  sexualOrientation) |>
+  rename("No %" = Percent, "Yes %" = "Percent ") |>
+  select(- No, - Yes ) %>% 
+  gt(rowname_col = "Variable") |>
+  tab_options(table.font.size = 30) %>% 
+  tab_header(
+    title = "Demographic Characteristics of Adolescents by Hopelessness Status"
+  ) |>
+  tab_spanner(
+    label = "Persistent Sadness and Hopelessness",
+    columns = c("No %", "Ratio No/Yes",  "Yes %")
+  ) |>
+  tab_row_group(
+    label = md("**Race**"),
+    rows = c("Black or African American", "Hispanic/Latino",
+             "Multiple-Hispanic", "White", "Multiple-Non-Hispanic", "Other",
+             "Missing Race/Ethnicity"),
+    id = "race"
+  ) |>
+  # tab_row_group(
+  #   label = md("**Grade**"),
+  #   rows = c( "09","10","11","12", "Missing for Grade"),
+  #   id = "grade"
+  # ) |>
+  tab_row_group(
+    label = md("**Sex**"),
+    rows = c("Male","Female", "Missing for Sex"),
+    id = "sex"
+  ) |>
+  tab_row_group(
+    label = md("**Sexual Orientation**"),
+    rows = c("Heterosexual","LGBQT", "Missing for Sexual Orientation"),
+    id = "sexual orientation"
+  ) %>% 
+fmt_number(
+  columns = c(Overall),
+  decimals = 0,
+  use_seps = TRUE
+) |>
+  fmt_number(
+    columns = c("No %", "Yes %", "Ratio No/Yes"),
+    decimals = 2,
+    use_seps = FALSE
+  ) |>
+  tab_source_note(
+    source_note = "Age: Mean = 16.1, Median = 16, Min = 12, Max = 18, SD = 1,23"
+  ) |>
+  tab_source_note(
+    source_note = "Results from the Youth Risk Behavior Survey (YRBS) 2019"
+  ) |>
+  cols_align(
+    align = "center",
+    columns = c(Overall, `Ratio No/Yes`, "No %", "Yes %")
+  ) |>
+  cols_label(
+    `No %` = md("**No %**"),
+    `Yes %` = md("**Yes %**"),
+    Overall = md("**Overall**"),
+    `Ratio No/Yes` = md("**Ratio No/Yes**")
+  ) %>% 
+  tab_style(
+    style = cell_text(color = "darkgrey"),
+    locations = cells_body(
+      columns = c("No %", "Yes %", "Overall")
+    )
+  ) %>% 
+  row_group_order(groups = c("sex", "race", "sexual orientation"))
+
+```
+
+
+###### Table 2
+
+```{r metrics, fig.align='center'}
+lasso_metrics <- readRDS("results_poster/metricsTable_results.rds") |>
+  mutate(Method = "Lasso")
+
+randomForest_metrics <- readRDS("results_poster/metricsTable_rf.rds") |>
+  mutate(Method = "Random Forest")
+
+xgboost_metrics <- readRDS("results_poster/metricsTable_xg.rds") |>
+  mutate(Method = "XGboost")
+
+metric_table <-
+  bind_rows(lasso_metrics, randomForest_metrics, xgboost_metrics) |>
+  select(Method, .metric, .estimate) |>
+  pivot_wider(names_from = .metric, values_from = .estimate) |>
+  rename("Kappa" = "kap", "Accuracy" = "accuracy", "AUC" = "roc_auc",
+         "Sensitivity" = "sensitivity", "Specificity" = "specificity",
+         "Log loss" = "mn_log_loss") 
+
+
+
+gt_metrics <- gt::gt(metric_table)
+
+gt_metrics |>
+  tab_options(table.font.size = 30, 
+              footnotes.font.size = 5) %>% 
+  gt::tab_header(
+    title = "Performance Metrics for the LASSO, Random Forest
+              and Xgboost Models",
+    subtitle = "Predicting Sadness and Hopelesseness for 13,491 Adolescents
+                Using the YRBS 2019 Data"
+  ) |>
+  tab_source_note(
+    source_note = "Kappa: value < 0 no agreement, 0–0.20 as slight, 0.21–0.40
+                   as fair, 0.41–0.60 as moderate, 0.61–0.80 as substantial
+                   Landis and Koch (1977)"
+  ) |>
+  tab_source_note(
+    source_note = "Accuracy, Sensitivity, Specificity, and AUC: Have a range of [0, 1].
+                  The greater the value, the better is the performance of
+                  the model"
+  ) |>
+  tab_source_note(
+    source_note = "Log loss is a measure of the performance of a classification model. A perfect model has a log loss of 0."
+  ) |>
+  fmt_number(
+    columns = c(Kappa, Accuracy, AUC, `Log loss`, Sensitivity, Specificity),
+    decimals = 3,
+    use_seps = FALSE
+  ) |>
+  tab_style(
+    style = cell_text(color = "darkgrey"),
+    locations = cells_body(
+      columns = c(Kappa, Accuracy, AUC, `Log loss`, Sensitivity, Specificity)
+    )
+  ) %>% 
+  opt_row_striping(row_striping = FALSE) |>
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", 
+                color = "black")
+    ),
+    locations = cells_body(
+      columns = Kappa,
+      rows = Kappa > 0.388
+    )
+  ) |>
+  opt_row_striping(row_striping = FALSE) |>
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", 
+                color = "black")
+    ),
+    locations = cells_body(
+      columns = Accuracy,
+      rows = Accuracy > 0.732
+    )) %>% 
+  opt_row_striping(row_striping = FALSE) |>
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", 
+                color = "black")
+    ),
+    locations = cells_body(
+      columns = AUC,
+      rows = AUC > 0.772
+    )
+  ) |>
+ opt_row_striping(row_striping = FALSE) |>
+ tab_style(
+   style = list(
+     cell_text(weight = "bold", 
+                color = "black")
+   ),
+   locations = cells_body(
+     columns = Sensitivity,
+     rows = Sensitivity > 0.89
+   )
+ ) |>
+ opt_row_striping(row_striping = FALSE) |>
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", 
+                color = "black")
+    ),
+    locations = cells_body(
+      columns = Specificity,
+      rows = Specificity > 0.50
+    )
+ ) |>
+  opt_row_striping(row_striping = FALSE) |>
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", 
+                color = "black")
+    ),
+    locations = cells_body(
+      columns = `Log loss`,
+      rows = `Log loss` <  0.544
+    )) %>% 
+  cols_align(
+    align = "center",
+    columns = c(Kappa, Accuracy, AUC, `Log loss`, Sensitivity, Specificity))  
+   
+```
+
+
+###### Figure 1 
+
+```{r vip, echo=FALSE, out.width='80%', fig.align='center', fig.height=6}
+library(ggrepel)
+
+lasso_vip <- readRDS("results_poster/importancePlot.rds")$data |>
+  mutate(Model = "LASSO")
+
+randomForest_vip <- readRDS("results_poster/importance_plot_rf.rds")$data |>
+  mutate(Model = "Random Forest")
+
+
+xgboost_vip <- readRDS("results_poster/importance_plot_xg.rds")$data |>
+  mutate(Model = "XGboost")
+
+# vip_models_df
+bind_rows(lasso_vip, randomForest_vip, xgboost_vip) |>
+  group_by(Model) |>
+  arrange(desc(Importance)) |>
+  mutate(order = row_number()) |>
+  mutate(
+    Variable = str_remove(Variable, "Sex_"),
+    Variable = str_replace(
+      Variable,
+      pattern = "Sleep", "Hours of Sleep"
+    ),
+    Variable = str_replace(
+      Variable,
+      pattern = "Breakfast_Eating", "Eating Breakfast"
+    ),
+    Variable = str_replace(
+      Variable,
+      pattern = "SexOrientation_LGBQT", "LGBTQ"
+    ),
+    Variable = str_replace(
+      Variable,
+      pattern = "Bullying_At_School_TRUE.", "Bullied at School"
+    ),
+    Variable = str_replace(
+      Variable,
+      pattern = "Electronic_Bullying_TRUE.", "Cyberbullying"
+    ),
+    Variable = str_replace(
+      Variable,
+      pattern = "Video_Games", "Hours Video Games"
+    ),
+    Variable = str_replace_all(Variable, pattern = "_", " "),
+    Variable = str_remove_all(Variable, pattern = "\\."),
+    Variable = str_remove_all(Variable, pattern = "Use"),
+    Variable = str_remove_all(Variable, pattern = "TRUE")
+  ) |>
+  ggplot(aes(x = Model, y = order)) +
+  geom_line(aes(group = Variable), color = "#B6862C") +
+  geom_label_repel(aes(label = Variable), point.size = NA, color = "black") +
+  scale_y_reverse(label = c("Most Important", "2nd", "3rd", "4th", "5th", 
+                            "6th", "7th", "8th", "9th", "10th"), breaks = c(1:10)) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none") +
+  labs(x = "", y = "") +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  ) +
+  theme(text = element_text(size = 10)) +
+  labs(
+    title = "Important Variables Selected by \nLASSO, Random Forest and XGboost Models",
+    caption = "Predicting Sadness and Hopelesseness for 13,491 Adolescents Using
+                    the YRBS 2019 Data"
+  ) +
+  ggeasy::easy_center_title()
+```
+
+</br>
+
+###### Figure 2
+
+```{r lasso, echo=FALSE, out.width='80%', fig.align='center',fig.height=5}
+risk_protective <- readRDS("results_poster/ris_protective.rds")
+
+risk_protective$data |>
+  mutate(
+    Variable = str_remove(Variable, "Sex_"),
+    Variable = str_replace(
+      Variable,
+      pattern = "Sleep", "Hours of Sleep"
+    ),
+    Variable = str_replace(
+      Variable,
+      pattern = "Breakfast_Eating", "Eating Breakfast"
+    ),
+    Variable = str_replace(
+      Variable,
+      pattern = "SexOrientation_LGBQT", "LGBTQ"
+    ),
+    Variable = str_replace(
+      Variable,
+      pattern = "Bullying_At_School_TRUE.", "Bullied at School"
+    ),
+    Variable = str_replace(
+      Variable,
+      pattern = "Electronic_Bullying_TRUE.", "Cyberbullying"
+    ),
+    Sign = str_replace(
+      Sign,
+      pattern = "NEG", "Low Risk of Feeling Hopeless"
+    ),
+    Sign = str_replace(
+      Sign,
+      pattern = "POS", "High Risk of Feeling Hopeless"
+    ),
+  ) |>
+  group_by(Sign) |>
+  slice_max(Importance, n = 3) |>
+  ungroup() |>
+  ggplot(aes(Importance, fct_reorder(Variable, Importance), fill = Sign)) +
+  geom_col(width = 0.2) +
+  facet_wrap(vars(Sign), scales = "free_y") +
+  labs(y = NULL) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none") +
+  labs(x = "", y = "Importance") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  theme(axis.line = element_line(colour = "grey50")) +
+  scale_fill_manual(values = c("#081E3F", "#B6862C")) +
+  # theme(text = element_text(size = 20)) +
+  labs(
+    title = "Predictors Driving the LASSO Classification Model \nfor Sadness and Hopelesseness",
+    caption = "N = 13,491 USA Adolescents Using the YRBS 2019 Data"
+  ) +
+  ggeasy::easy_center_title()
+
+```
+
+
+
+
+
+# Discussion
+
+The present study successfully developed three distinct supervised machine learning algorithms that identified the primary risk factors for persistent sadness and hopelessness among adolescents from a set of multiple risk factors. The models consistently identified five main variables as risk factors, which aligns with past research indicating the correlation between sleep disturbances, trauma, and stressful life events with an increased likelihood of hopelessness (Li et al., 2020; Lane & Miranda, 2018). The study also found that adolescent girls are more affected than their male counterparts and that LGBQT+ youth are substantially more likely to experience persistent sadness and hopelessness, which highlights the need for selective interventions to be developed specifically for this group. By targeting these factors and incorporating them into school-based programs, struggling youth could potentially be provided with a lifeline.
+
+These results are essential in calling for more time and attention to be committed to addressing the issue of hopelessness during intervention given its increasing prevalence and significant relationship with suicide ideation and attempts (Park & Kim, 2018). Understanding correlated risk factors is crucial to help clinicians better identify and target at-risk adolescents. 
+
+In conclusion, this study represents a significant step forward in acknowledging hopelessness as a crucial research concern and identifying factors that must be considered in prevention and intervention efforts. This innovative methodological approach underscored multiple risk factors that increase the likelihood of persistent sadness and hopelessness, confirmed the high presence of hopelessness among teenage girls and LGBQT+ youth, and highlighted consistent risk factors that should be included in prevention efforts.
+
+# Limitations
+</br>
+It is important to note, that this study has certain limitations. The construction of the algorithm in this study did not consider the imbalance of the outcome, leading to better sensitivity than specificity. Having better sensitivity than specificity means that our model is more likely to correctly identify adolescents who will feel hopeless, but it may also generate a higher number of false positives.  Future research should employ techniques such as downsampling to improve model performance.
+
+# References
+
+```{r,  echo=FALSE, out.width="30%", fig.align='center'}
+
+knitr::include_graphics("frame.png")
+
+```
+
+
